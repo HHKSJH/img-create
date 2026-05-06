@@ -126,6 +126,18 @@
       </section>
     </section>
   </main>
+  <div id="previewModal" class="preview-modal" hidden>
+    <div class="preview-backdrop" data-preview-close></div>
+    <div class="preview-panel" role="dialog" aria-modal="true" aria-label="图片预览">
+      <button id="previewClose" class="preview-close" type="button" aria-label="关闭预览">×</button>
+      <div class="preview-image-wrap">
+        <img id="previewImage" class="preview-image" alt="preview image" />
+      </div>
+      <div class="preview-actions">
+        <a id="previewOpenLink" class="preview-link" href="#" target="_blank" rel="noopener">打开原图</a>
+      </div>
+    </div>
+  </div>
   <script src="./js/storage.js"></script>
   <script src="./js/api.js"></script>
   <script src="./js/ui.js"></script>

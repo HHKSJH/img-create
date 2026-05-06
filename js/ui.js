@@ -9,8 +9,14 @@ const ui = (() => {
   const dropdownEls = Array.from(document.querySelectorAll("[data-dropdown]"));
   const sendBtnEl = document.getElementById("sendBtn");
   const clearBtnEl = document.getElementById("clearBtn");
+  const previewModalEl = document.getElementById("previewModal");
+  const previewImageEl = document.getElementById("previewImage");
+  const previewOpenLinkEl = document.getElementById("previewOpenLink");
+  const previewCloseEl = document.getElementById("previewClose");
+  const previewCloseTriggers = Array.from(document.querySelectorAll("[data-preview-close]"));
   const objectUrls = new Set();
   let loadingEl = null;
+  let retryHandler = null;
 
   function hideEmpty() {
     if (emptyEl) {
@@ -70,6 +76,20 @@ const ui = (() => {
     return objectUrl;
   }
 
+  function openPreview(imageUrl) {
+    previewImageEl.src = imageUrl;
+    previewOpenLinkEl.href = imageUrl;
+    previewModalEl.hidden = false;
+    document.body.style.overflow = "hidden";
+  }
+
+  function closePreview() {
+    previewModalEl.hidden = true;
+    previewImageEl.removeAttribute("src");
+    previewOpenLinkEl.href = "#";
+    document.body.style.overflow = "";
+  }
+
   function buildImageCard(imageUrl) {
     const cardEl = document.createElement("div");
     cardEl.className = "card";
@@ -78,6 +98,7 @@ const ui = (() => {
     imgEl.src = imageUrl;
     imgEl.alt = "generated image";
     imgEl.loading = "lazy";
+    imgEl.addEventListener("click", () => openPreview(imageUrl));
     cardEl.appendChild(imgEl);
     return cardEl;
   }
@@ -96,6 +117,34 @@ const ui = (() => {
       bubbleEl.appendChild(buildImageCard(imageUrl));
     }
 
+    chatEl.appendChild(itemEl);
+    chatEl.scrollTop = chatEl.scrollHeight;
+  }
+
+  function appendRetryMessage(text) {
+    hideEmpty();
+    const itemEl = document.createElement("div");
+    itemEl.className = "message assistant";
+
+    const bubbleEl = document.createElement("div");
+    bubbleEl.className = "bubble";
+    bubbleEl.textContent = text || "";
+
+    const retryButtonEl = document.createElement("button");
+    retryButtonEl.type = "button";
+    retryButtonEl.className = "retry-button";
+    retryButtonEl.innerHTML = `
+      <img class="retry-icon" src="./assets/chongshi.png" alt="" aria-hidden="true" />
+      <span>重试</span>
+    `;
+    retryButtonEl.addEventListener("click", () => {
+      if (typeof retryHandler === "function") {
+        retryHandler();
+      }
+    });
+
+    bubbleEl.appendChild(retryButtonEl);
+    itemEl.appendChild(bubbleEl);
     chatEl.appendChild(itemEl);
     chatEl.scrollTop = chatEl.scrollHeight;
   }
@@ -204,11 +253,21 @@ const ui = (() => {
     document.addEventListener("keydown", (event) => {
       if (event.key === "Escape") {
         closeAllDropdowns();
+        closePreview();
       }
     });
   }
 
+  function bindPreviewEvents() {
+    previewCloseEl.addEventListener("click", closePreview);
+    previewCloseTriggers.forEach((triggerEl) => {
+      triggerEl.addEventListener("click", closePreview);
+    });
+  }
+
   function bindEvents(handlers) {
+    retryHandler = handlers.onRetry || null;
+
     apiKeyEl.addEventListener("change", () => handlers.onApiKeyChange(apiKeyEl.value));
     apiKeyEl.addEventListener("blur", () => handlers.onApiKeyChange(apiKeyEl.value));
     accessKeyEl.addEventListener("change", () => handlers.onAccessKeyChange(accessKeyEl.value));
@@ -226,10 +285,12 @@ const ui = (() => {
     });
 
     bindDropdowns();
+    bindPreviewEvents();
   }
 
   return {
     appendMessage,
+    appendRetryMessage,
     base64ToObjectUrl,
     bindEvents,
     clearMessages,
