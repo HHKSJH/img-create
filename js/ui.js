@@ -12,11 +12,16 @@ const ui = (() => {
   const previewModalEl = document.getElementById("previewModal");
   const previewImageEl = document.getElementById("previewImage");
   const previewOpenLinkEl = document.getElementById("previewOpenLink");
+  const previewHintEl = document.getElementById("previewHint");
   const previewCloseEl = document.getElementById("previewClose");
   const previewCloseTriggers = Array.from(document.querySelectorAll("[data-preview-close]"));
   const objectUrls = new Set();
   let loadingEl = null;
   let retryHandler = null;
+
+  function isWeChatWebView() {
+    return /MicroMessenger/i.test(window.navigator.userAgent);
+  }
 
   function hideEmpty() {
     if (emptyEl) {
@@ -79,6 +84,10 @@ const ui = (() => {
   function openPreview(imageUrl) {
     previewImageEl.src = imageUrl;
     previewOpenLinkEl.href = imageUrl;
+    previewHintEl.textContent = isWeChatWebView()
+      ? "微信内无法直接打开 blob 原图，请长按上方图片保存。"
+      : "";
+    previewOpenLinkEl.textContent = isWeChatWebView() ? "长按图片保存" : "打开原图";
     previewModalEl.hidden = false;
     document.body.style.overflow = "hidden";
   }
@@ -87,6 +96,8 @@ const ui = (() => {
     previewModalEl.hidden = true;
     previewImageEl.removeAttribute("src");
     previewOpenLinkEl.href = "#";
+    previewHintEl.textContent = "";
+    previewOpenLinkEl.textContent = "打开原图";
     document.body.style.overflow = "";
   }
 
@@ -272,6 +283,10 @@ const ui = (() => {
       }
 
       event.preventDefault();
+      if (isWeChatWebView()) {
+        previewHintEl.textContent = "微信内请直接长按上方图片保存到相册。";
+        return;
+      }
       const openedWindow = window.open(imageUrl, "_blank", "noopener");
       if (!openedWindow) {
         window.location.href = imageUrl;

@@ -644,8 +644,21 @@ button:disabled {
 
 .preview-actions {
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
   margin-top: 14px;
+}
+
+.preview-hint {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.preview-actions {
+  justify-content: flex-end;
 }
 
 .preview-link {
