@@ -263,6 +263,20 @@ const ui = (() => {
     previewCloseTriggers.forEach((triggerEl) => {
       triggerEl.addEventListener("click", closePreview);
     });
+
+    previewOpenLinkEl.addEventListener("click", (event) => {
+      const imageUrl = previewOpenLinkEl.href;
+      if (!imageUrl || imageUrl === "#") {
+        event.preventDefault();
+        return;
+      }
+
+      event.preventDefault();
+      const openedWindow = window.open(imageUrl, "_blank", "noopener");
+      if (!openedWindow) {
+        window.location.href = imageUrl;
+      }
+    });
   }
 
   function bindEvents(handlers) {
