@@ -16,8 +16,18 @@ const ui = (() => {
   const previewCloseEl = document.getElementById("previewClose");
   const previewCloseTriggers = Array.from(document.querySelectorAll("[data-preview-close]"));
   const objectUrls = new Set();
+  const progressPhases = [
+    { until: 18, label: "正在提交生成请求" },
+    { until: 42, label: "正在排队与准备资源" },
+    { until: 68, label: "正在生成画面细节" },
+    { until: 88, label: "正在整理返回结果" },
+    { until: 96, label: "即将完成，请保持页面开启" }
+  ];
+
   let loadingEl = null;
   let retryHandler = null;
+  let progressTimer = null;
+  let progressValue = 0;
 
   function isWeChatWebView() {
     return /MicroMessenger/i.test(window.navigator.userAgent);
@@ -38,24 +48,35 @@ const ui = (() => {
     }
   }
 
+  function closeAllDropdowns() {
+    dropdownEls.forEach((dropdownEl) => {
+      dropdownEl.classList.remove("is-open");
+      dropdownEl.querySelector(".dropdown-trigger")?.setAttribute("aria-expanded", "false");
+    });
+  }
+
   function setFormDisabled(disabled) {
     promptEl.disabled = disabled;
     apiKeyEl.disabled = disabled;
     accessKeyEl.disabled = disabled;
     sizeEl.disabled = disabled;
     styleEl.disabled = disabled;
+
     dropdownEls.forEach((dropdownEl) => {
       const triggerEl = dropdownEl.querySelector(".dropdown-trigger");
       const optionEls = dropdownEl.querySelectorAll(".dropdown-option");
-      triggerEl.disabled = disabled;
-      if (disabled) {
-        dropdownEl.classList.remove("is-open");
-        triggerEl.setAttribute("aria-expanded", "false");
+      if (triggerEl) {
+        triggerEl.disabled = disabled;
+        if (disabled) {
+          dropdownEl.classList.remove("is-open");
+          triggerEl.setAttribute("aria-expanded", "false");
+        }
       }
       optionEls.forEach((optionEl) => {
         optionEl.disabled = disabled;
       });
     });
+
     sendBtnEl.disabled = disabled;
     clearBtnEl.disabled = disabled;
     sendBtnEl.textContent = disabled ? "生成中..." : "开始生成";
@@ -70,8 +91,10 @@ const ui = (() => {
   }
 
   function base64ToObjectUrl(base64Data, mimeType = "image/png") {
-    const byteString = window.atob(base64Data);
+    const normalizedData = base64Data.includes(",") ? base64Data.split(",").pop() : base64Data;
+    const byteString = window.atob(normalizedData);
     const bytes = new Uint8Array(byteString.length);
+
     for (let i = 0; i < byteString.length; i += 1) {
       bytes[i] = byteString.charCodeAt(i);
     }
@@ -79,6 +102,14 @@ const ui = (() => {
     const objectUrl = URL.createObjectURL(new Blob([bytes], { type: mimeType }));
     objectUrls.add(objectUrl);
     return objectUrl;
+  }
+
+  function imageDataToObjectUrl(imageData) {
+    if (imageData?.type === "url") {
+      return imageData.value;
+    }
+
+    return base64ToObjectUrl(imageData?.value || imageData);
   }
 
   function openPreview(imageUrl) {
@@ -93,6 +124,10 @@ const ui = (() => {
   }
 
   function closePreview() {
+    if (previewModalEl.hidden) {
+      return;
+    }
+
     previewModalEl.hidden = true;
     previewImageEl.removeAttribute("src");
     previewOpenLinkEl.href = "#";
@@ -107,7 +142,7 @@ const ui = (() => {
 
     const imgEl = document.createElement("img");
     imgEl.src = imageUrl;
-    imgEl.alt = "generated image";
+    imgEl.alt = "生成结果";
     imgEl.loading = "lazy";
     imgEl.addEventListener("click", () => openPreview(imageUrl));
     cardEl.appendChild(imgEl);
@@ -144,10 +179,17 @@ const ui = (() => {
     const retryButtonEl = document.createElement("button");
     retryButtonEl.type = "button";
     retryButtonEl.className = "retry-button";
-    retryButtonEl.innerHTML = `
-      <img class="retry-icon" src="./assets/chongshi.png" alt="" aria-hidden="true" />
-      <span>重试</span>
-    `;
+
+    const retryIconEl = document.createElement("img");
+    retryIconEl.className = "retry-icon";
+    retryIconEl.src = "./assets/chongshi.png";
+    retryIconEl.alt = "";
+    retryIconEl.setAttribute("aria-hidden", "true");
+
+    const retryTextEl = document.createElement("span");
+    retryTextEl.textContent = "重试";
+
+    retryButtonEl.append(retryIconEl, retryTextEl);
     retryButtonEl.addEventListener("click", () => {
       if (typeof retryHandler === "function") {
         retryHandler();
@@ -160,23 +202,96 @@ const ui = (() => {
     chatEl.scrollTop = chatEl.scrollHeight;
   }
 
+  function findProgressLabel(value) {
+    const phase = progressPhases.find((item) => value <= item.until);
+    return phase ? phase.label : progressPhases[progressPhases.length - 1].label;
+  }
+
+  function updateLoadingProgress(value) {
+    if (!loadingEl) {
+      return;
+    }
+
+    const barFillEl = loadingEl.querySelector("[data-progress-fill]");
+    const valueEl = loadingEl.querySelector("[data-progress-value]");
+    const labelEl = loadingEl.querySelector("[data-progress-label]");
+    const progressbarEl = loadingEl.querySelector('[role="progressbar"]');
+    const safeValue = Math.max(0, Math.min(99, Math.round(value)));
+
+    if (barFillEl) {
+      barFillEl.style.width = `${safeValue}%`;
+    }
+    if (valueEl) {
+      valueEl.textContent = `${safeValue}%`;
+    }
+    if (labelEl) {
+      labelEl.textContent = findProgressLabel(safeValue);
+    }
+    if (progressbarEl) {
+      progressbarEl.setAttribute("aria-valuenow", String(safeValue));
+    }
+  }
+
+  function startLoadingProgress() {
+    window.clearInterval(progressTimer);
+    progressValue = 6;
+    updateLoadingProgress(progressValue);
+
+    progressTimer = window.setInterval(() => {
+      if (progressValue >= 96) {
+        return;
+      }
+
+      const delta = progressValue < 48 ? 4.2 : progressValue < 78 ? 2.1 : 0.6;
+      progressValue = Math.min(96, progressValue + delta);
+      updateLoadingProgress(progressValue);
+    }, 900);
+  }
+
+  function stopLoadingProgress() {
+    window.clearInterval(progressTimer);
+    progressTimer = null;
+    progressValue = 0;
+  }
+
   function showLoading() {
     hideEmpty();
     setFormDisabled(true);
     loadingEl = document.createElement("div");
     loadingEl.className = "message assistant loading";
     loadingEl.innerHTML = `
-      <div class="bubble">
-        <div class="dots"><span></span><span></span><span></span></div>
-        <span>生成中，请稍候...</span>
+      <div class="bubble loading-bubble" aria-live="polite">
+        <div class="loading-topline">
+          <span class="loading-title">图片生成中</span>
+          <span class="loading-value" data-progress-value>0%</span>
+        </div>
+        <div class="loading-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+          <div class="loading-fill" data-progress-fill></div>
+          <div class="loading-sheen"></div>
+        </div>
+        <div class="loading-meta">
+          <span data-progress-label>正在提交生成请求</span>
+          <span>进度为估算值</span>
+        </div>
       </div>
     `;
     chatEl.appendChild(loadingEl);
     chatEl.scrollTop = chatEl.scrollHeight;
+    startLoadingProgress();
   }
 
   function hideLoading() {
-    if (loadingEl && loadingEl.parentNode) {
+    if (loadingEl) {
+      updateLoadingProgress(100);
+      const progressbarEl = loadingEl.querySelector('[role="progressbar"]');
+      if (progressbarEl) {
+        progressbarEl.setAttribute("aria-valuenow", "100");
+      }
+    }
+
+    stopLoadingProgress();
+
+    if (loadingEl?.parentNode) {
       loadingEl.parentNode.removeChild(loadingEl);
     }
     loadingEl = null;
@@ -217,13 +332,6 @@ const ui = (() => {
   }
 
   function bindDropdowns() {
-    function closeAllDropdowns() {
-      dropdownEls.forEach((dropdownEl) => {
-        dropdownEl.classList.remove("is-open");
-        dropdownEl.querySelector(".dropdown-trigger").setAttribute("aria-expanded", "false");
-      });
-    }
-
     dropdownEls.forEach((dropdownEl) => {
       const inputEl = dropdownEl.querySelector('input[type="hidden"]');
       const triggerEl = dropdownEl.querySelector(".dropdown-trigger");
@@ -309,6 +417,7 @@ const ui = (() => {
         return;
       }
       if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
+        event.preventDefault();
         handlers.onSend();
       }
     });
@@ -329,6 +438,7 @@ const ui = (() => {
     focusPrompt,
     getInputValues,
     hideLoading,
+    imageDataToObjectUrl,
     revokeObjectUrls,
     showLoading
   };

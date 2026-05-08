@@ -4,17 +4,29 @@ const storage = (() => {
 
   function getLocalValues() {
     return {
-      apiKey: window.localStorage.getItem(API_KEY_STORAGE_KEY) || "",
-      accessKey: window.localStorage.getItem(ACCESS_KEY_STORAGE_KEY) || ""
+      apiKey: readValue(API_KEY_STORAGE_KEY),
+      accessKey: readValue(ACCESS_KEY_STORAGE_KEY)
     };
+  }
+
+  function readValue(key) {
+    try {
+      return window.localStorage.getItem(key) || "";
+    } catch {
+      return "";
+    }
   }
 
   function persistValue(key, value) {
     const trimmedValue = value.trim();
-    if (trimmedValue) {
-      window.localStorage.setItem(key, trimmedValue);
-    } else {
-      window.localStorage.removeItem(key);
+    try {
+      if (trimmedValue) {
+        window.localStorage.setItem(key, trimmedValue);
+      } else {
+        window.localStorage.removeItem(key);
+      }
+    } catch {
+      // 本地存储不可用时不影响生成流程。
     }
   }
 

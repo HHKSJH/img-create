@@ -10,46 +10,63 @@ const STYLE_PROMPTS = {
 let lastRequestPayload = null;
 
 function buildPrompt(userPrompt, stylePreset) {
+  const prompt = userPrompt.trim();
   const stylePrompt = STYLE_PROMPTS[stylePreset] || "";
-  return stylePrompt ? `${userPrompt}\n\n风格要求：${stylePrompt}` : userPrompt;
+  return stylePrompt ? `${prompt}\n\n风格要求：${stylePrompt}` : prompt;
 }
 
-async function runGeneration(requestPayload, { appendUserMessage = true } = {}) {
-  const { prompt, apiKey, accessKey, size, stylePreset } = requestPayload;
-
+function validatePayload({ prompt, apiKey }) {
   if (!apiKey) {
     ui.appendMessage("assistant", "请先输入 API Key。");
     ui.focusApiKey();
-    return;
+    return false;
   }
 
   if (!prompt) {
+    ui.appendMessage("assistant", "请先描述你想生成的画面。");
+    ui.focusPrompt();
+    return false;
+  }
+
+  return true;
+}
+
+async function runGeneration(requestPayload, { appendUserMessage = true } = {}) {
+  const payload = {
+    ...requestPayload,
+    prompt: requestPayload.prompt.trim(),
+    apiKey: requestPayload.apiKey.trim(),
+    accessKey: requestPayload.accessKey.trim(),
+    stylePreset: STYLE_PROMPTS[requestPayload.stylePreset] === undefined ? "auto" : requestPayload.stylePreset
+  };
+
+  if (!validatePayload(payload)) {
     return;
   }
 
-  storage.persistApiKey(apiKey);
-  storage.persistAccessKey(accessKey);
+  storage.persistApiKey(payload.apiKey);
+  storage.persistAccessKey(payload.accessKey);
 
-  lastRequestPayload = { ...requestPayload };
-  const finalPrompt = buildPrompt(prompt, stylePreset);
+  lastRequestPayload = { ...payload };
+  const finalPrompt = buildPrompt(payload.prompt, payload.stylePreset);
 
   if (appendUserMessage) {
-    ui.appendMessage("user", prompt);
+    ui.appendMessage("user", payload.prompt);
     ui.clearPrompt();
   }
 
   ui.showLoading();
 
   try {
-    const base64Data = await imageApi.generateImage({
-      apiKey,
+    const imageData = await imageApi.generateImage({
+      apiKey: payload.apiKey,
       prompt: finalPrompt,
-      size
+      size: payload.size
     });
-    const imageUrl = ui.base64ToObjectUrl(base64Data);
+    const imageUrl = ui.imageDataToObjectUrl(imageData);
     ui.appendMessage("assistant", "图片已生成。", imageUrl);
   } catch (error) {
-    ui.appendRetryMessage(`请求失败：${error.message}`);
+    ui.appendRetryMessage(`请求失败：${error.message || "未知错误"}`);
   } finally {
     ui.hideLoading();
   }

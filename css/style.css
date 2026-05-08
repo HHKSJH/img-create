@@ -19,11 +19,7 @@ html, body {
   min-height: 100%;
   font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
   color: var(--text);
-  background:
-    radial-gradient(circle at 12% 16%, rgba(20, 184, 166, 0.16), transparent 24%),
-    radial-gradient(circle at 84% 14%, rgba(37, 99, 235, 0.14), transparent 26%),
-    radial-gradient(circle at 76% 76%, rgba(15, 118, 110, 0.12), transparent 22%),
-    linear-gradient(180deg, #f9fbff 0%, #f2f5f9 100%);
+  background: linear-gradient(180deg, #f9fbff 0%, #eef3f7 100%);
 }
 
 body {
@@ -32,34 +28,6 @@ body {
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
   overscroll-behavior-y: contain;
-}
-
-body::before,
-body::after {
-  content: "";
-  position: fixed;
-  z-index: 0;
-  pointer-events: none;
-  filter: blur(60px);
-  opacity: 0.5;
-}
-
-body::before {
-  top: 40px;
-  left: -40px;
-  width: 260px;
-  height: 260px;
-  background: rgba(20, 184, 166, 0.18);
-  border-radius: 50%;
-}
-
-body::after {
-  right: -80px;
-  bottom: 60px;
-  width: 320px;
-  height: 320px;
-  background: rgba(37, 99, 235, 0.14);
-  border-radius: 50%;
 }
 
 .app {
@@ -95,22 +63,10 @@ body::after {
 .hero::before {
   content: "";
   position: absolute;
-  top: -80px;
-  right: -40px;
-  width: 260px;
-  height: 260px;
-  background: radial-gradient(circle, rgba(20, 184, 166, 0.22), transparent 62%);
-  pointer-events: none;
-}
-
-.hero::after {
-  content: "";
-  position: absolute;
-  left: 20px;
-  bottom: -100px;
-  width: 320px;
-  height: 220px;
-  background: radial-gradient(circle, rgba(37, 99, 235, 0.12), transparent 68%);
+  inset: 0;
+  background:
+    linear-gradient(135deg, rgba(20, 184, 166, 0.12), transparent 38%),
+    linear-gradient(315deg, rgba(37, 99, 235, 0.08), transparent 42%);
   pointer-events: none;
 }
 
@@ -140,8 +96,8 @@ body::after {
 h1 {
   margin: 18px 0 10px;
   font-size: clamp(36px, 5vw, 62px);
-  line-height: 0.95;
-  letter-spacing: -0.06em;
+  line-height: 1.02;
+  letter-spacing: 0;
 }
 
 .hero p {
@@ -214,6 +170,7 @@ h1 {
   padding: 18px;
   flex: 1;
   min-height: 0;
+  overflow: hidden;
 }
 
 .workspace-head {
@@ -311,28 +268,71 @@ h1 {
 
 .message.loading .bubble {
   background: var(--loading);
-  display: flex;
-  align-items: center;
-  gap: 10px;
   color: #315270;
 }
 
-.dots {
-  display: inline-flex;
+.loading-bubble {
+  width: min(100%, 420px);
+  display: grid;
+  gap: 12px;
+}
+
+.loading-topline,
+.loading-meta {
+  display: flex;
   align-items: center;
-  gap: 6px;
+  justify-content: space-between;
+  gap: 12px;
 }
 
-.dots span {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--accent);
-  animation: pulse 1s infinite ease-in-out;
+.loading-title,
+.loading-value {
+  font-weight: 600;
 }
 
-.dots span:nth-child(2) { animation-delay: 0.15s; }
-.dots span:nth-child(3) { animation-delay: 0.3s; }
+.loading-value {
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+
+.loading-track {
+  position: relative;
+  height: 12px;
+  border-radius: 999px;
+  overflow: hidden;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.8), rgba(225, 236, 244, 0.9));
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, 0.9),
+    inset 0 -1px 2px rgba(31, 57, 82, 0.08);
+}
+
+.loading-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 0;
+  border-radius: inherit;
+  background:
+    linear-gradient(90deg, #14b8a6 0%, #0f766e 52%, #0f5ed7 100%);
+  box-shadow:
+    0 6px 18px rgba(15, 118, 110, 0.24),
+    inset 0 1px 0 rgba(255, 255, 255, 0.5);
+  transition: width 720ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.loading-sheen {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.55) 50%, transparent 100%);
+  transform: translateX(-100%);
+  animation: loadingSweep 1.8s linear infinite;
+}
+
+.loading-meta {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted);
+}
 
 .card {
   margin-top: 12px;
@@ -432,7 +432,7 @@ h1 {
 .dropdown-value {
   font-size: 15px;
   font-weight: 600;
-  letter-spacing: -0.02em;
+  letter-spacing: 0;
 }
 
 .dropdown-meta {
@@ -491,7 +491,7 @@ h1 {
 .dropdown-option-title {
   font-size: 14px;
   font-weight: 600;
-  letter-spacing: -0.02em;
+  letter-spacing: 0;
 }
 
 .dropdown-option-meta {
@@ -555,6 +555,11 @@ button {
 }
 
 button:hover:not(:disabled) { transform: translateY(-1px); }
+button:focus-visible,
+.preview-link:focus-visible {
+  outline: 3px solid rgba(15, 118, 110, 0.2);
+  outline-offset: 3px;
+}
 button:disabled {
   opacity: 0.62;
   cursor: not-allowed;
@@ -704,9 +709,9 @@ button:disabled {
   to { opacity: 1; transform: translateY(0); }
 }
 
-@keyframes pulse {
-  0%, 80%, 100% { opacity: 0.35; transform: scale(0.9); }
-  40% { opacity: 1; transform: scale(1); }
+@keyframes loadingSweep {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(100%); }
 }
 
 @supports not (backdrop-filter: blur(18px)) {
@@ -764,7 +769,11 @@ button:disabled {
     padding-top: 14px;
     padding-bottom: calc(14px + env(safe-area-inset-bottom, 0px));
   }
-  h1 { font-size: 22px; }
+  h1 {
+    margin: 0 0 12px;
+    font-size: 26px;
+    line-height: 1.18;
+  }
   .workspace-head, .composer-bar {
     flex-direction: column;
     align-items: stretch;
@@ -800,5 +809,10 @@ button:disabled {
   }
   .preview-image {
     max-height: calc(100dvh - 152px);
+  }
+  .loading-topline,
+  .loading-meta {
+    align-items: flex-start;
+    flex-direction: column;
   }
 }
