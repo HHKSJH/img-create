@@ -7,8 +7,10 @@ const STYLE_PROMPTS = {
   minimalist: "极简风格，留白克制，元素精简，色调统一。"
 };
 
+let currentSession = storage.createSession();
+let currentSessionId = currentSession.id;
+let sessionsIndex = [];
 let lastRequestPayload = null;
-let lastSuccessfulPrompt = "";
 let contextMode = "continuation";
 
 function buildPrompt(userPrompt, stylePreset) {
@@ -22,28 +24,42 @@ function summarizePrompt(prompt) {
   if (!normalized) {
     return "当前无上下文";
   }
-
   return normalized.length > 88 ? `${normalized.slice(0, 88)}...` : normalized;
 }
 
+function getCurrentContextPrompt() {
+  return currentSession.contextPrompt || "";
+}
+
 function updateContextSummary() {
+  const contextPrompt = getCurrentContextPrompt();
   ui.renderContextSummary({
     mode: contextMode,
-    hasContext: Boolean(lastSuccessfulPrompt),
-    summary: summarizePrompt(lastSuccessfulPrompt)
+    hasContext: Boolean(contextPrompt),
+    summary: summarizePrompt(contextPrompt)
+  });
+}
+
+function updateWorkspaceMeta() {
+  const imageCount = currentSession.messages.filter((message) => message.imageRef).length;
+  ui.setWorkspaceMeta({
+    title: currentSession.title,
+    subtitle: imageCount ? `当前会话已生成 ${imageCount} 张图片。` : "输入需求后，生成结果会显示在这里。",
+    tag: currentSession.messages.length ? `${currentSession.messages.length} 条记录` : "新会话"
   });
 }
 
 function buildFinalPrompt({ prompt, stylePreset }) {
   const currentPrompt = buildPrompt(prompt, stylePreset);
+  const contextPrompt = getCurrentContextPrompt();
 
-  if (contextMode !== "continuation" || !lastSuccessfulPrompt) {
+  if (contextMode !== "continuation" || !contextPrompt) {
     return currentPrompt;
   }
 
   return [
-    "基于上一轮成功生成的画面继续优化。",
-    `上一轮核心描述：${lastSuccessfulPrompt}`,
+    "基于当前会话最近一次成功生成的画面继续优化。",
+    `上一轮核心描述：${contextPrompt}`,
     `本轮新增要求：${currentPrompt}`,
     "请保留延续性，仅按新增要求调整画面。"
   ].join("\n\n");
@@ -65,6 +81,40 @@ function validatePayload({ prompt, apiKey }) {
   return true;
 }
 
+function buildSessionTitle(prompt) {
+  const normalized = prompt.replace(/\s+/g, " ").trim();
+  if (!normalized) {
+    return "未命名会话";
+  }
+  return normalized.length > 22 ? `${normalized.slice(0, 22)}...` : normalized;
+}
+
+async function refreshSessionIndex() {
+  sessionsIndex = await storage.listSessions();
+  ui.renderSessionList(sessionsIndex, currentSessionId);
+  ui.renderSessionMeta(`${sessionsIndex.length} 个本地会话`);
+}
+
+async function refreshStorageUsage() {
+  const estimate = await storage.estimateStorage();
+  ui.renderStorageUsage(estimate);
+}
+
+async function persistCurrentSession() {
+  currentSession = await storage.saveSession(currentSession);
+  currentSessionId = currentSession.id;
+  await refreshSessionIndex();
+  await refreshStorageUsage();
+  updateWorkspaceMeta();
+  updateContextSummary();
+}
+
+function buildUserMessageText(prompt) {
+  return contextMode === "continuation" && getCurrentContextPrompt()
+    ? `继续创作：${prompt}`
+    : prompt;
+}
+
 async function runGeneration(requestPayload, { appendUserMessage = true } = {}) {
   const payload = {
     ...requestPayload,
@@ -83,15 +133,21 @@ async function runGeneration(requestPayload, { appendUserMessage = true } = {}) 
 
   lastRequestPayload = { ...payload };
   const finalPrompt = buildFinalPrompt(payload);
+  const messageTime = Date.now();
 
   if (appendUserMessage) {
-    ui.appendMessage(
-      "user",
-      contextMode === "continuation" && lastSuccessfulPrompt
-        ? `继续创作：${payload.prompt}`
-        : payload.prompt
-    );
+    const userMessage = {
+      id: storage.createId("msg"),
+      role: "user",
+      text: buildUserMessageText(payload.prompt),
+      createdAt: messageTime
+    };
+    currentSession.messages.push(userMessage);
+    currentSession.title = currentSession.messages.length <= 1 ? buildSessionTitle(payload.prompt) : currentSession.title;
+    currentSession.lastPrompt = payload.prompt;
+    ui.appendMessage("user", userMessage.text);
     ui.clearPrompt();
+    await persistCurrentSession();
   }
 
   ui.showLoading();
@@ -102,13 +158,33 @@ async function runGeneration(requestPayload, { appendUserMessage = true } = {}) 
       prompt: finalPrompt,
       size: payload.size
     });
-    const imageUrl = ui.imageDataToObjectUrl(imageData);
 
-    lastSuccessfulPrompt = buildPrompt(payload.prompt, payload.stylePreset);
-    updateContextSummary();
-    ui.appendMessage("assistant", "图片已生成。", imageUrl);
+    const renderData = ui.imageDataToRenderData(imageData);
+    const promptForContext = buildPrompt(payload.prompt, payload.stylePreset);
+    const assistantMessage = {
+      id: storage.createId("msg"),
+      role: "assistant",
+      text: "图片已生成。",
+      createdAt: Date.now(),
+      imageRef: renderData.imageRef,
+      imageUrl: renderData.imageUrl
+    };
+
+    currentSession.contextPrompt = promptForContext;
+    currentSession.lastPrompt = payload.prompt;
+    currentSession.messages.push(assistantMessage);
+    ui.appendMessage("assistant", assistantMessage.text, assistantMessage.imageUrl);
+    await persistCurrentSession();
   } catch (error) {
-    ui.appendRetryMessage(`请求失败：${error.message || "未知错误"}`);
+    const errorText = `请求失败：${error.message || "未知错误"}`;
+    currentSession.messages.push({
+      id: storage.createId("msg"),
+      role: "assistant",
+      text: errorText,
+      createdAt: Date.now()
+    });
+    ui.appendRetryMessage(errorText);
+    await persistCurrentSession();
   } finally {
     ui.hideLoading();
   }
@@ -128,38 +204,90 @@ async function retryLastRequest() {
   await runGeneration(lastRequestPayload, { appendUserMessage: false });
 }
 
-function resetContext() {
-  if (!lastSuccessfulPrompt) {
-    updateContextSummary();
+async function loadSession(sessionId) {
+  const session = await storage.getSession(sessionId);
+  if (!session) {
     return;
   }
 
-  lastSuccessfulPrompt = "";
+  ui.revokeObjectUrls();
+  currentSession = session;
+  currentSessionId = session.id;
+  ui.renderMessages(session.messages);
+  updateWorkspaceMeta();
+  updateContextSummary();
+  await refreshSessionIndex();
+}
+
+async function createAndOpenSession() {
+  currentSession = storage.createSession();
+  currentSessionId = currentSession.id;
+  ui.clearMessages();
+  updateWorkspaceMeta();
+  updateContextSummary();
+  await refreshSessionIndex();
+}
+
+async function deleteSession(sessionId) {
+  await storage.deleteSession(sessionId);
+
+  if (sessionId === currentSessionId) {
+    await createAndOpenSession();
+  }
+
+  await refreshSessionIndex();
+  await refreshStorageUsage();
+
+  if (sessionId !== currentSessionId) {
+    updateWorkspaceMeta();
+    updateContextSummary();
+  }
+}
+
+async function clearAllSessions() {
+  await storage.clearAllSessions();
+  await createAndOpenSession();
+  await refreshStorageUsage();
+}
+
+function resetContext() {
+  currentSession.contextPrompt = "";
   updateContextSummary();
 }
 
-function init() {
+async function init() {
   ui.fillLocalValues(storage.getLocalValues());
+  updateWorkspaceMeta();
   updateContextSummary();
+  await refreshSessionIndex();
+  await refreshStorageUsage();
+
+  if (sessionsIndex.length) {
+    await loadSession(sessionsIndex[0].id);
+  }
 
   ui.bindEvents({
     onApiKeyChange: storage.persistApiKey,
     onAccessKeyChange: storage.persistAccessKey,
     onSend: sendMessage,
     onRetry: retryLastRequest,
-    onClear: () => {
-      ui.clearMessages();
-      ui.clearPrompt();
-      ui.focusPrompt();
+    onClearCurrentView: () => {
+      ui.renderMessages(currentSession.messages);
     },
     onContextModeChange: (enabled) => {
       contextMode = enabled ? "continuation" : "independent";
       updateContextSummary();
     },
-    onResetContext: resetContext
+    onResetContext: resetContext,
+    onNewSession: createAndOpenSession,
+    onOpenSession: loadSession,
+    onDeleteSession: deleteSession,
+    onClearAllSessions: clearAllSessions
   });
 
   window.addEventListener("pagehide", ui.revokeObjectUrls);
 }
 
-init();
+init().catch((error) => {
+  ui.appendMessage("assistant", `初始化失败：${error.message || "未知错误"}`);
+});

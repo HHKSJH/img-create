@@ -1,41 +1,81 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <title>小胡作图</title>
+  <title>小虎机作图</title>
   <link rel="stylesheet" href="./css/style.css" />
 </head>
 <body>
-  <main class="app">
-    <section class="hero">
-      <div class="hero-inner">
-        <!-- <span class="badge">Pure Frontend Mode</span> -->
+  <main class="app-shell">
+    <aside class="sidebar">
+      <div class="brand-panel">
+        <p class="eyebrow">Image Workspace</p>
         <h1>把一句想法，变成一张图。</h1>
-        <!-- <p>直接从浏览器调用第三方接口。请自行承担密钥暴露风险。</p> -->
+        <p class="brand-copy">本地保存会话结构，按需恢复当前会话。图片资源单独存储，不一次性拖慢页面。</p>
+      </div>
 
-        <div class="access-card">
-          <div class="field">
-            <label for="apiKey">API Key</label>
-            <input id="apiKey" class="input" type="password" placeholder="输入第三方接口的 API Key" autocomplete="off" />
-            <p class="access-hint">已自动记住本机 API Key。不要在公共设备上使用。</p>
+      <section class="sidebar-card">
+        <div class="sidebar-card-head">
+          <strong>访问配置</strong>
+          <span>仅保存在当前浏览器</span>
+        </div>
+        <div class="field">
+          <label for="apiKey">API Key</label>
+          <input id="apiKey" class="input" type="password" placeholder="输入第三方接口的 API Key" autocomplete="off" />
+        </div>
+        <div class="field">
+          <label for="accessKey">访问码</label>
+          <input id="accessKey" class="input" type="password" placeholder="可选，用来区分你的使用入口" autocomplete="off" />
+        </div>
+        <p class="access-hint">不要在公共设备保存密钥。历史会话和图片缓存都只在本地可见。</p>
+      </section>
+
+      <section class="sidebar-card sessions-panel">
+        <div class="sidebar-card-head sessions-head">
+          <div>
+            <strong>历史会话</strong>
+            <span id="sessionMeta">正在准备本地历史…</span>
           </div>
-          <div class="field">
-            <label for="accessKey">访问码</label>
-            <input id="accessKey" class="input" type="password" placeholder="可选，用来区分你的使用入口" autocomplete="off" />
+          <div class="head-actions">
+            <button id="newSessionBtn" class="head-action-btn create-action" type="button" aria-label="新建会话">
+              <img class="head-action-icon-image" src="./assets/create.png" alt="" aria-hidden="true" />
+              <span>新建会话</span>
+            </button>
           </div>
         </div>
-      </div>
-    </section>
 
-    <section class="right">
+        <div class="storage-card">
+          <div class="storage-row">
+            <span>本地缓存</span>
+            <span id="storageUsageText">--</span>
+          </div>
+          <div class="storage-track" aria-hidden="true">
+            <div id="storageUsageBar" class="storage-fill"></div>
+          </div>
+          <p class="storage-hint">仅加载当前会话。超过阈值会自动清理最旧会话，避免页面变慢。</p>
+        </div>
+
+        <div id="sessionList" class="session-list" aria-live="polite"></div>
+
+        <div class="sessions-danger-zone">
+          <button id="clearAllSessionsBtn" class="panel-danger-btn" type="button" aria-label="删除全部会话">
+            <img class="head-action-icon-image" src="./assets/delete.png" alt="" aria-hidden="true" />
+            <span>删除全部会话</span>
+          </button>
+          <p class="sessions-danger-hint">会清空当前浏览器中的全部本地会话和图片缓存。</p>
+        </div>
+      </section>
+    </aside>
+
+    <section class="main-pane">
       <section class="workspace">
         <div class="workspace-head">
           <div>
-            <strong>生成结果</strong>
-            <span>输入需求后，图片会显示在这里。</span>
+            <strong id="workspaceTitle">当前会话</strong>
+            <span id="workspaceSubtitle">输入需求后，生成结果会显示在这里。</span>
           </div>
-          <div class="tag">直连第三方接口</div>
+          <div id="sessionTag" class="tag">新会话</div>
         </div>
 
         <div id="chat" class="chat">
@@ -53,7 +93,7 @@
         <div class="memory-panel">
           <div class="memory-copy">
             <span class="memory-title">连续创作</span>
-            <p id="memoryDescription" class="memory-description">默认继承最近一次成功生成的描述，用于继续优化同一张图。</p>
+            <p id="memoryDescription" class="memory-description">默认继承当前会话最近一次成功生成的描述，用于继续优化同一张图。</p>
           </div>
           <div class="memory-actions">
             <label class="memory-toggle" for="contextMode">
@@ -61,13 +101,15 @@
               <span class="memory-switch" aria-hidden="true"></span>
               <span class="memory-mode-text">继承上一轮</span>
             </label>
-            <button id="resetContextBtn" class="ghost" type="button">清除记忆</button>
+            <button id="resetContextBtn" class="ghost" type="button">清除上下文</button>
           </div>
         </div>
+
         <div id="contextSummary" class="context-summary is-empty" aria-live="polite">
           <span class="context-chip">当前无上下文</span>
-          <p class="context-text">生成成功后，这里会展示本轮将继承的描述摘要。</p>
+          <p class="context-text">当前会话生成成功后，这里会展示本轮将继承的描述摘要。</p>
         </div>
+
         <div class="option-grid">
           <div class="field option-field">
             <label for="sizeTrigger">尺寸</label>
@@ -95,28 +137,29 @@
               </div>
             </div>
           </div>
+
           <div class="field option-field">
             <label for="styleTrigger">风格</label>
             <div class="dropdown" data-dropdown>
               <input id="stylePreset" type="hidden" value="auto" />
               <button id="styleTrigger" class="dropdown-trigger" type="button" aria-haspopup="listbox" aria-expanded="false">
                 <span class="dropdown-copy">
-                  <span class="dropdown-value">不限定</span>
+                  <span class="dropdown-value">不限风格</span>
                   <span class="dropdown-meta">按描述自由生成</span>
                 </span>
               </button>
               <div class="dropdown-menu" role="listbox" aria-label="风格选择">
-                <button class="dropdown-option is-selected" type="button" data-value="auto" data-label="不限定" data-meta="按描述自由生成">
-                  <span class="dropdown-option-title">不限定</span>
+                <button class="dropdown-option is-selected" type="button" data-value="auto" data-label="不限风格" data-meta="按描述自由生成">
+                  <span class="dropdown-option-title">不限风格</span>
                   <span class="dropdown-option-meta">按描述自由生成</span>
                 </button>
-                <button class="dropdown-option" type="button" data-value="poster" data-label="高级海报" data-meta="克制排版，强视觉感">
+                <button class="dropdown-option" type="button" data-value="poster" data-label="高级海报" data-meta="克制排版，视觉张力强">
                   <span class="dropdown-option-title">高级海报</span>
-                  <span class="dropdown-option-meta">克制排版，强视觉感</span>
+                  <span class="dropdown-option-meta">克制排版，视觉张力强</span>
                 </button>
-                <button class="dropdown-option" type="button" data-value="photo" data-label="真实摄影" data-meta="自然光影，真实质感">
+                <button class="dropdown-option" type="button" data-value="photo" data-label="真实摄影" data-meta="自然光影，质感清晰">
                   <span class="dropdown-option-title">真实摄影</span>
-                  <span class="dropdown-option-meta">自然光影，真实质感</span>
+                  <span class="dropdown-option-meta">自然光影，质感清晰</span>
                 </button>
                 <button class="dropdown-option" type="button" data-value="illustration" data-label="精致插画" data-meta="色彩统一，细节完整">
                   <span class="dropdown-option-title">精致插画</span>
@@ -134,23 +177,26 @@
             </div>
           </div>
         </div>
+
         <textarea id="prompt" class="prompt" placeholder="描述你想生成的画面..." aria-label="图片描述"></textarea>
+
         <div class="composer-bar">
-          <div class="composer-tip mobile-hidden">Ctrl + Enter / Cmd + Enter 快速发送</div>
+          <div class="composer-tip">Ctrl + Enter / Cmd + Enter 快速发送</div>
           <div class="actions">
-            <button id="clearBtn" class="secondary" type="button">清空</button>
+            <button id="clearBtn" class="secondary" type="button">清空当前显示</button>
             <button id="sendBtn" class="primary" type="button">开始生成</button>
           </div>
         </div>
       </section>
     </section>
   </main>
+
   <div id="previewModal" class="preview-modal" hidden>
     <div class="preview-backdrop" data-preview-close></div>
     <div class="preview-panel" role="dialog" aria-modal="true" aria-label="图片预览">
       <button id="previewClose" class="preview-close" type="button" aria-label="关闭预览">×</button>
       <div class="preview-image-wrap">
-        <img id="previewImage" class="preview-image" alt="preview image" />
+        <img id="previewImage" class="preview-image" alt="预览图" />
       </div>
       <div class="preview-actions">
         <span id="previewHint" class="preview-hint"></span>
@@ -158,6 +204,20 @@
       </div>
     </div>
   </div>
+
+  <div id="clearAllConfirmModal" class="confirm-modal" hidden>
+    <div class="preview-backdrop" data-clear-all-close></div>
+    <div class="confirm-panel" role="dialog" aria-modal="true" aria-labelledby="clearAllConfirmTitle" aria-describedby="clearAllConfirmDesc">
+      <div class="confirm-badge">危险操作</div>
+      <h2 id="clearAllConfirmTitle">删除全部会话</h2>
+      <p id="clearAllConfirmDesc">这会清空当前浏览器里保存的全部会话记录和对应图片缓存，释放本地存储空间，操作后不能恢复。</p>
+      <div class="confirm-actions">
+        <button id="clearAllCancelBtn" class="secondary" type="button">取消</button>
+        <button id="clearAllConfirmBtn" class="danger-solid" type="button">确认删除全部</button>
+      </div>
+    </div>
+  </div>
+
   <script src="./js/storage.js"></script>
   <script src="./js/api.js"></script>
   <script src="./js/ui.js"></script>
