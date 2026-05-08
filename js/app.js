@@ -8,11 +8,45 @@ const STYLE_PROMPTS = {
 };
 
 let lastRequestPayload = null;
+let lastSuccessfulPrompt = "";
+let contextMode = "continuation";
 
 function buildPrompt(userPrompt, stylePreset) {
   const prompt = userPrompt.trim();
   const stylePrompt = STYLE_PROMPTS[stylePreset] || "";
   return stylePrompt ? `${prompt}\n\n风格要求：${stylePrompt}` : prompt;
+}
+
+function summarizePrompt(prompt) {
+  const normalized = prompt.replace(/\s+/g, " ").trim();
+  if (!normalized) {
+    return "当前无上下文";
+  }
+
+  return normalized.length > 88 ? `${normalized.slice(0, 88)}...` : normalized;
+}
+
+function updateContextSummary() {
+  ui.renderContextSummary({
+    mode: contextMode,
+    hasContext: Boolean(lastSuccessfulPrompt),
+    summary: summarizePrompt(lastSuccessfulPrompt)
+  });
+}
+
+function buildFinalPrompt({ prompt, stylePreset }) {
+  const currentPrompt = buildPrompt(prompt, stylePreset);
+
+  if (contextMode !== "continuation" || !lastSuccessfulPrompt) {
+    return currentPrompt;
+  }
+
+  return [
+    "基于上一轮成功生成的画面继续优化。",
+    `上一轮核心描述：${lastSuccessfulPrompt}`,
+    `本轮新增要求：${currentPrompt}`,
+    "请保留延续性，仅按新增要求调整画面。"
+  ].join("\n\n");
 }
 
 function validatePayload({ prompt, apiKey }) {
@@ -48,10 +82,15 @@ async function runGeneration(requestPayload, { appendUserMessage = true } = {}) 
   storage.persistAccessKey(payload.accessKey);
 
   lastRequestPayload = { ...payload };
-  const finalPrompt = buildPrompt(payload.prompt, payload.stylePreset);
+  const finalPrompt = buildFinalPrompt(payload);
 
   if (appendUserMessage) {
-    ui.appendMessage("user", payload.prompt);
+    ui.appendMessage(
+      "user",
+      contextMode === "continuation" && lastSuccessfulPrompt
+        ? `继续创作：${payload.prompt}`
+        : payload.prompt
+    );
     ui.clearPrompt();
   }
 
@@ -64,6 +103,9 @@ async function runGeneration(requestPayload, { appendUserMessage = true } = {}) 
       size: payload.size
     });
     const imageUrl = ui.imageDataToObjectUrl(imageData);
+
+    lastSuccessfulPrompt = buildPrompt(payload.prompt, payload.stylePreset);
+    updateContextSummary();
     ui.appendMessage("assistant", "图片已生成。", imageUrl);
   } catch (error) {
     ui.appendRetryMessage(`请求失败：${error.message || "未知错误"}`);
@@ -86,8 +128,19 @@ async function retryLastRequest() {
   await runGeneration(lastRequestPayload, { appendUserMessage: false });
 }
 
+function resetContext() {
+  if (!lastSuccessfulPrompt) {
+    updateContextSummary();
+    return;
+  }
+
+  lastSuccessfulPrompt = "";
+  updateContextSummary();
+}
+
 function init() {
   ui.fillLocalValues(storage.getLocalValues());
+  updateContextSummary();
 
   ui.bindEvents({
     onApiKeyChange: storage.persistApiKey,
@@ -98,7 +151,12 @@ function init() {
       ui.clearMessages();
       ui.clearPrompt();
       ui.focusPrompt();
-    }
+    },
+    onContextModeChange: (enabled) => {
+      contextMode = enabled ? "continuation" : "independent";
+      updateContextSummary();
+    },
+    onResetContext: resetContext
   });
 
   window.addEventListener("pagehide", ui.revokeObjectUrls);

@@ -6,6 +6,11 @@ const ui = (() => {
   const accessKeyEl = document.getElementById("accessKey");
   const sizeEl = document.getElementById("size");
   const styleEl = document.getElementById("stylePreset");
+  const contextModeEl = document.getElementById("contextMode");
+  const contextSummaryEl = document.getElementById("contextSummary");
+  const memoryDescriptionEl = document.getElementById("memoryDescription");
+  const resetContextBtnEl = document.getElementById("resetContextBtn");
+  const jumpToBottomBtnEl = document.getElementById("jumpToBottomBtn");
   const dropdownEls = Array.from(document.querySelectorAll("[data-dropdown]"));
   const sendBtnEl = document.getElementById("sendBtn");
   const clearBtnEl = document.getElementById("clearBtn");
@@ -28,6 +33,16 @@ const ui = (() => {
   let retryHandler = null;
   let progressTimer = null;
   let progressValue = 0;
+
+  function toggleJumpButton() {
+    const distanceFromBottom = chatEl.scrollHeight - chatEl.scrollTop - chatEl.clientHeight;
+    jumpToBottomBtnEl.classList.toggle("is-visible", distanceFromBottom > 120);
+  }
+
+  function scrollChatToBottom() {
+    chatEl.scrollTop = chatEl.scrollHeight;
+    toggleJumpButton();
+  }
 
   function isWeChatWebView() {
     return /MicroMessenger/i.test(window.navigator.userAgent);
@@ -61,6 +76,8 @@ const ui = (() => {
     accessKeyEl.disabled = disabled;
     sizeEl.disabled = disabled;
     styleEl.disabled = disabled;
+    contextModeEl.disabled = disabled;
+    resetContextBtnEl.disabled = disabled || !resetContextBtnEl.dataset.enabled;
 
     dropdownEls.forEach((dropdownEl) => {
       const triggerEl = dropdownEl.querySelector(".dropdown-trigger");
@@ -164,7 +181,7 @@ const ui = (() => {
     }
 
     chatEl.appendChild(itemEl);
-    chatEl.scrollTop = chatEl.scrollHeight;
+    scrollChatToBottom();
   }
 
   function appendRetryMessage(text) {
@@ -199,7 +216,33 @@ const ui = (() => {
     bubbleEl.appendChild(retryButtonEl);
     itemEl.appendChild(bubbleEl);
     chatEl.appendChild(itemEl);
-    chatEl.scrollTop = chatEl.scrollHeight;
+    scrollChatToBottom();
+  }
+
+  function renderContextSummary({ mode, hasContext, summary }) {
+    const modeText = mode === "continuation" ? "继承上一轮" : "独立创作";
+    const description = mode === "continuation"
+      ? "默认继承最近一次成功生成的描述，用于继续优化同一张图。"
+      : "每次请求都按当前输入独立生成，不自动引用上一轮描述。";
+
+    memoryDescriptionEl.textContent = description;
+    resetContextBtnEl.dataset.enabled = hasContext ? "1" : "";
+    resetContextBtnEl.disabled = !hasContext;
+
+    if (!hasContext) {
+      contextSummaryEl.className = "context-summary is-empty";
+      contextSummaryEl.innerHTML = `
+        <span class="context-chip">${modeText}</span>
+        <p class="context-text">当前无可继承的成功记录。先生成一张图后，这里会展示上下文摘要。</p>
+      `;
+      return;
+    }
+
+    contextSummaryEl.className = "context-summary";
+    contextSummaryEl.innerHTML = `
+      <span class="context-chip">${modeText}</span>
+      <p class="context-text">${summary}</p>
+    `;
   }
 
   function findProgressLabel(value) {
@@ -276,7 +319,7 @@ const ui = (() => {
       </div>
     `;
     chatEl.appendChild(loadingEl);
-    chatEl.scrollTop = chatEl.scrollHeight;
+    scrollChatToBottom();
     startLoadingProgress();
   }
 
@@ -302,6 +345,7 @@ const ui = (() => {
     revokeObjectUrls();
     chatEl.innerHTML = "";
     restoreEmpty();
+    toggleJumpButton();
   }
 
   function fillLocalValues({ apiKey, accessKey }) {
@@ -409,8 +453,12 @@ const ui = (() => {
     apiKeyEl.addEventListener("blur", () => handlers.onApiKeyChange(apiKeyEl.value));
     accessKeyEl.addEventListener("change", () => handlers.onAccessKeyChange(accessKeyEl.value));
     accessKeyEl.addEventListener("blur", () => handlers.onAccessKeyChange(accessKeyEl.value));
+    contextModeEl.addEventListener("change", () => handlers.onContextModeChange(contextModeEl.checked));
+    resetContextBtnEl.addEventListener("click", handlers.onResetContext);
+    jumpToBottomBtnEl.addEventListener("click", scrollChatToBottom);
     sendBtnEl.addEventListener("click", handlers.onSend);
     clearBtnEl.addEventListener("click", handlers.onClear);
+    chatEl.addEventListener("scroll", toggleJumpButton);
     promptEl.addEventListener("keydown", (event) => {
       if (sendBtnEl.disabled) {
         event.preventDefault();
@@ -424,6 +472,7 @@ const ui = (() => {
 
     bindDropdowns();
     bindPreviewEvents();
+    toggleJumpButton();
   }
 
   return {
@@ -439,6 +488,7 @@ const ui = (() => {
     getInputValues,
     hideLoading,
     imageDataToObjectUrl,
+    renderContextSummary,
     revokeObjectUrls,
     showLoading
   };

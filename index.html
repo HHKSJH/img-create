@@ -46,9 +46,28 @@
             </div>
           </div>
         </div>
+        <button id="jumpToBottomBtn" class="jump-bottom" type="button" aria-label="回到底部">↓</button>
       </section>
 
       <section class="composer">
+        <div class="memory-panel">
+          <div class="memory-copy">
+            <span class="memory-title">连续创作</span>
+            <p id="memoryDescription" class="memory-description">默认继承最近一次成功生成的描述，用于继续优化同一张图。</p>
+          </div>
+          <div class="memory-actions">
+            <label class="memory-toggle" for="contextMode">
+              <input id="contextMode" type="checkbox" checked />
+              <span class="memory-switch" aria-hidden="true"></span>
+              <span class="memory-mode-text">继承上一轮</span>
+            </label>
+            <button id="resetContextBtn" class="ghost" type="button">清除记忆</button>
+          </div>
+        </div>
+        <div id="contextSummary" class="context-summary is-empty" aria-live="polite">
+          <span class="context-chip">当前无上下文</span>
+          <p class="context-text">生成成功后，这里会展示本轮将继承的描述摘要。</p>
+        </div>
         <div class="option-grid">
           <div class="field option-field">
             <label for="sizeTrigger">尺寸</label>
