@@ -344,7 +344,6 @@ const ui = (() => {
       <article class="session-item ${session.id === activeSessionId ? "is-active" : ""}" data-session-id="${session.id}">
         <button class="session-main" type="button" data-action="open-session" data-session-id="${session.id}">
           <strong>${session.title}</strong>
-          <span>${session.lastPrompt || "还没有生成内容"}</span>
           <small>${session.imageCount} 张图 · ${formatRelativeTime(session.updatedAt)}</small>
         </button>
         <button class="session-delete" type="button" data-action="delete-session" data-session-id="${session.id}" aria-label="删除会话">×</button>
